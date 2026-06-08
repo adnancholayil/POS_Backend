@@ -3,7 +3,7 @@ const logger = require('./logger');
 
 const connectDB = async () => {
   try {
-    let uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/pos-saas';
+    let uri = process.env.MONGODB_URI;
     if (uri.startsWith('MONGODB_URI=')) {
       uri = uri.substring('MONGODB_URI='.length);
     }
