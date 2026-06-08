@@ -29,7 +29,7 @@ const deleteUser = asyncHandler(async (req, res) => {
 
 const updateAvatar = asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json(new ApiResponse(400, 'No image file provided.'));
-  const user = await userService.updateAvatar(req.user._id, req.tenantId, req.file.buffer, req.file.mimetype);
+  const user = await userService.updateAvatar(req.user._id, req.tenantId, req.file.filename);
   res.status(200).json(new ApiResponse(200, 'Avatar updated.', user));
 });
 

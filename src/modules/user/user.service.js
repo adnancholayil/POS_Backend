@@ -2,7 +2,6 @@ const userRepository = require('./user.repository');
 const ApiError = require('../../utils/apiError');
 const { createAuditLog } = require('../../middlewares/audit.middleware');
 const { getPagination, getPaginationMeta, getSort } = require('../../utils/queryHelper');
-const { uploadImage } = require('../../config/cloudinary');
 const Role = require('../role/role.model');
 
 class UserService {
@@ -62,11 +61,10 @@ class UserService {
     return true;
   }
 
-  async updateAvatar(userId, tenantId, fileBuffer, mimetype) {
-    if (!fileBuffer) throw new ApiError(400, 'No file provided.');
-    const base64 = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
-    const result = await uploadImage(base64, 'pos_avatars');
-    const user = await userRepository.update(userId, tenantId, { avatar: result.secure_url });
+  async updateAvatar(userId, tenantId, filename) {
+    if (!filename) throw new ApiError(400, 'No file provided.');
+    const avatarUrl = `/uploads/${filename}`;
+    const user = await userRepository.update(userId, tenantId, { avatar: avatarUrl });
     return user;
   }
 

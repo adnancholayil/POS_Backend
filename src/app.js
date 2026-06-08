@@ -2,19 +2,26 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
+const path = require('path');
 const errorMiddleware = require('./middlewares/error.middleware');
 const ApiError = require('./utils/apiError');
 
 const app = express();
 
-// Set security HTTP headers
-app.use(helmet());
+// Set security HTTP headers with cross-origin resource policy enabled for local assets
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+// Serve static upload files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Enable CORS
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
+
 
 // Parse json request body
 app.use(express.json({ limit: '10mb' }));

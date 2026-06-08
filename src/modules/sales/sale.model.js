@@ -15,7 +15,7 @@ const saleSchema = new mongoose.Schema(
     paidAmount: { type: Number, default: 0 },
     status: { type: String, enum: ['completed', 'partially_returned', 'returned', 'cancelled'], default: 'completed' },
     notes: { type: String, trim: true },
-    invoicePath: { type: String }, // Cloudinary PDF URL
+    invoicePath: { type: String }, // Local PDF path or dynamically generated
     isGSTInvoice: { type: Boolean, default: false },
     tenantId: { type: mongoose.Schema.Types.ObjectId, required: true },
   },

@@ -2,7 +2,6 @@ const productRepository = require('./product.repository');
 const ApiError = require('../../utils/apiError');
 const { createAuditLog } = require('../../middlewares/audit.middleware');
 const { getPagination, getPaginationMeta, getSort } = require('../../utils/queryHelper');
-const { uploadImage, deleteImage } = require('../../config/cloudinary');
 const Inventory = require('../inventory/inventory.model');
 
 class ProductService {
@@ -81,9 +80,7 @@ class ProductService {
     const images = [];
     if (files && files.length > 0) {
       for (const file of files) {
-        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-        const result = await uploadImage(base64, 'pos_products');
-        images.push({ url: result.secure_url, publicId: result.public_id });
+        images.push({ url: `/uploads/${file.filename}`, publicId: file.filename });
       }
     }
     const product = await productRepository.create({ ...data, images, tenantId });
