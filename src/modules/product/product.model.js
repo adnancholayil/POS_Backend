@@ -24,6 +24,8 @@ const productSchema = new mongoose.Schema(
     productType: { type: String, enum: ['mobile', 'laptop', 'accessory', 'spare_part', 'other'], default: 'mobile' },
     images: [{ url: String, publicId: String }],
     variants: [variantSchema],
+    price: { type: Number, default: 0, min: 0 },
+    cost: { type: Number, default: 0, min: 0 },
     hasIMEI: { type: Boolean, default: false },
     warrantyMonths: { type: Number, default: 0 },
     taxRate: { type: Number, default: 0, min: 0, max: 100 }, // GST %
