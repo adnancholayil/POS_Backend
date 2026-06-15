@@ -11,53 +11,117 @@ class ReportService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
     const [
-      salesStats,
-      pendingRepairs,
+      monthSalesStats,
+      completedRepairs,
       lowStockCount,
-      totalProducts
+      totalProducts,
+      recentSales,
+      recentRepairs
     ] = await Promise.all([
-      // Sales stats for today
+      // Sales stats for this month
       Sale.aggregate([
-        { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: { $ne: 'cancelled' }, createdAt: { $gte: today } } },
-        { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } }
+        { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: { $ne: 'cancelled' }, createdAt: { $gte: startOfMonth } } },
+        { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
       ]),
-      // Pending Repairs count
-      Repair.countDocuments({ tenantId, status: { $in: ['pending', 'diagnosing', 'awaiting_parts', 'repairing'] } }),
+      // Completed Repairs count
+      Repair.countDocuments({ tenantId, status: { $in: ['ready', 'delivered'] } }),
       // Low stock count
       Inventory.countDocuments({ tenantId, $expr: { $lte: ['$quantity', '$lowStockThreshold'] } }),
       // Total products
-      Product.countDocuments({ tenantId, isActive: true })
+      Product.countDocuments({ tenantId, isActive: true }),
+      // Recent 5 sales
+      Sale.find({ tenantId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('customer'),
+      // Recent 5 repairs
+      Repair.find({ tenantId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('customer')
     ]);
 
-    // Calculate total profit from SaleItems sold today
-    const profitStats = await SaleItem.aggregate([
-      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), createdAt: { $gte: today } } },
-      { $project: {
-          netQty: { $subtract: ['$quantity', '$returnedQuantity'] },
-          costPrice: 1,
-          totalPrice: 1
-      }},
-      { $group: {
-          _id: null,
-          totalCost: { $sum: { $multiply: ['$costPrice', '$netQty'] } },
-          totalRevenue: { $sum: '$totalPrice' }
-      }}
-    ]);
+    const totalSalesAmount = monthSalesStats[0]?.totalRevenue || 0;
 
-    const revenue = salesStats[0]?.totalRevenue || 0;
-    const salesCount = salesStats[0]?.count || 0;
-    const totalCost = profitStats[0]?.totalCost || 0;
-    const profitRevenue = profitStats[0]?.totalRevenue || 0;
-    const profit = Math.max(0, profitRevenue - totalCost);
+    // Generate last 7 days salesTrend for charts
+    const salesTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+      const startOfDay = new Date(d);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(d);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Fetch sales total for this day
+      const daySales = await Sale.aggregate([
+        { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: { $ne: 'cancelled' }, createdAt: { $gte: startOfDay, $lte: endOfDay } } },
+        { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
+      ]);
+
+      // Fetch repairs count for this day
+      const dayRepairs = await Repair.countDocuments({
+        tenantId,
+        createdAt: { $gte: startOfDay, $lte: endOfDay }
+      });
+
+      // Fetch cost/profit for this day
+      const dayProfitStats = await SaleItem.aggregate([
+        { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), createdAt: { $gte: startOfDay, $lte: endOfDay } } },
+        { $project: {
+            netQty: { $subtract: ['$quantity', '$returnedQuantity'] },
+            costPrice: 1,
+            totalPrice: 1
+        }},
+        { $group: {
+            _id: null,
+            totalCost: { $sum: { $multiply: ['$costPrice', '$netQty'] } },
+            totalRevenue: { $sum: '$totalPrice' }
+        }}
+      ]);
+
+      const salesVal = daySales[0]?.totalRevenue || 0;
+      const profitVal = Math.max(0, (dayProfitStats[0]?.totalRevenue || 0) - (dayProfitStats[0]?.totalCost || 0));
+
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      salesTrend.push({
+        date: daysOfWeek[d.getDay()],
+        sales: salesVal,
+        repairs: dayRepairs,
+        profit: profitVal
+      });
+    }
+
+    // Map recent items to match frontend structure (with customerName snapshot)
+    const mappedRecentSales = recentSales.map(s => ({
+      _id: s._id,
+      invoiceNumber: s.invoiceNumber,
+      customerName: s.customerName || s.customer?.name || 'Walk-in Customer',
+      totalAmount: s.totalAmount,
+      createdAt: s.createdAt
+    }));
+
+    const mappedRecentRepairs = recentRepairs.map(r => ({
+      _id: r._id,
+      ticketNumber: r.ticketNumber,
+      deviceModel: r.deviceModel,
+      customerName: r.customer?.name || 'Walk-in Customer',
+      estimatedCost: r.estimatedCost,
+      status: r.status,
+      createdAt: r.createdAt
+    }));
 
     return {
-      todayRevenue: revenue,
-      todayProfit: profit,
-      todaySalesCount: salesCount,
-      pendingRepairsCount: pendingRepairs,
-      lowStockItemsCount: lowStockCount,
-      totalProductsCount: totalProducts
+      totalSalesAmount,
+      totalRevenue: totalSalesAmount,
+      completedRepairsCount: completedRepairs,
+      lowStockCount,
+      totalProductsCount: totalProducts,
+      salesTrend,
+      recentSales: mappedRecentSales,
+      recentRepairs: mappedRecentRepairs
     };
   }
 
