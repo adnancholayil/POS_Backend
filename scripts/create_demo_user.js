@@ -1,15 +1,15 @@
 // create_demo_user.js – run once to insert a demo tenant with known shop code DEMO01
 // Usage: `node scripts/create_demo_user.js`
 
-require('dotenv').config({ path: '../../.env' }); // adjust path if needed
+require('dotenv').config({ path: '../.env' }); // Adjusted path to backend .env
 
 const mongoose = require('mongoose');
 const AuthService = require('../src/modules/auth/auth.service');
 const Settings = require('../src/modules/setting/setting.model');
+const User = require('../src/modules/user/user.model');
 
 (async () => {
   try {
-    // Connect to MongoDB using the same URI used by the app
     const uri = process.env.MONGODB_URI;
     if (!uri) {
       console.error('MONGODB_URI not defined in .env');
@@ -19,7 +19,7 @@ const Settings = require('../src/modules/setting/setting.model');
     console.log('✅ Connected to MongoDB');
 
     // Check if a demo user already exists
-    const existing = await mongoose.model('User').findOne({ email: 'admin@demo.com' });
+    const existing = await User.findOne({ email: 'admin@demo.com' });
     if (existing) {
       console.log('Demo user already exists – aborting.');
       process.exit(0);
