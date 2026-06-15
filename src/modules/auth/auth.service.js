@@ -88,6 +88,16 @@ const SALESMAN_PERMISSIONS = [
 ];
 
 class AuthService {
+  // ─── Helper: resolve shopCode → real tenantId ─────────────────────────────
+  async resolveShopCode(tenantIdOrCode) {
+    if (!tenantIdOrCode) return tenantIdOrCode;
+    if (tenantIdOrCode.length <= 8) {
+      const settings = await Settings.findOne({ shopCode: tenantIdOrCode.toUpperCase() });
+      if (settings) return settings.tenantId;
+    }
+    return tenantIdOrCode;
+  }
+
   // ─── REGISTER (Owner creates a new tenant) ────────────────────────────────
   async register(data) {
     const { name, email, password, shopName } = data;
@@ -143,53 +153,60 @@ class AuthService {
       password,
       role: adminRole._id,
       tenantId: PLACEHOLDER, // temp
-      status: 'pending',
-      isEmailVerified: false,
+      status: 'active',
+      isEmailVerified: true, // auto-verified so login works immediately
     });
 
     // Set tenantId = own _id
     const tenantId = user._id;
     user.tenantId = tenantId;
-
-    // Generate email verification token
-    const verifyToken = generateToken();
-    user.emailVerificationToken = verifyToken;
-    user.emailVerificationExpires = getOtpExpiry(60 * 24); // 24h
     await user.save({ validateBeforeSave: false });
 
     // Update roles with correct tenantId
     await Role.updateMany({ tenantId: PLACEHOLDER }, { $set: { tenantId } });
 
-    // Create default shop settings
-    await Settings.create({ tenantId, shopName: shopName || name + "'s Shop" });
+    // Generate a memorable 6-char alphanumeric shopCode
+    const shopCode = (Math.random().toString(36).substring(2, 5) + Math.random().toString(36).substring(2, 5)).toUpperCase().substring(0, 6);
 
-    // Send verification email
-    const verifyUrl = `${process.env.CLIENT_URL}/verify-email?token=${verifyToken}`;
-    await sendEmail({
-      to: email,
-      subject: 'Verify your email — Shop Manager Pro',
-      html: `<p>Hello ${name},</p><p>Click the link below to verify your email:</p><a href="${verifyUrl}">${verifyUrl}</a><p>Link expires in 24 hours.</p>`,
-    });
+    // Create default shop settings with shopCode
+    await Settings.create({ tenantId, shopName: shopName || name + "'s Shop", shopCode });
 
-    return { userId: user._id, email: user.email };
+    // (Optional) Send a welcome email — does not block registration even if email fails
+    try {
+      const welcomeUrl = `${process.env.CLIENT_URL}/login`;
+      await sendEmail({
+        to: email,
+        subject: 'Welcome to Galaxy POS — Your Shop Code',
+        html: `<p>Hello ${name},</p><p>Your shop account is ready. Your Shop Code (to log in) is: <strong>${shopCode}</strong></p><p>Please save this code — you will need it to log in.</p><p><a href="${welcomeUrl}">Login now →</a></p>`,
+      });
+    } catch (mailErr) {
+      // Non-fatal: registration still succeeds even if email sending fails
+    }
+
+    return { userId: user._id, email: user.email, shopCode };
   }
 
   // ─── LOGIN ────────────────────────────────────────────────────────────────
-  async login(email, password, tenantId, ipAddress) {
+  async login(email, password, tenantIdOrCode, ipAddress) {
+    // Resolve shopCode → real tenantId if a short code was provided
+    let tenantId = tenantIdOrCode;
+    if (tenantIdOrCode && tenantIdOrCode.length <= 8) {
+      const settings = await Settings.findOne({ shopCode: tenantIdOrCode.toUpperCase() });
+      if (settings) {
+        tenantId = settings.tenantId;
+      }
+    }
+
     const user = await User.findOne({ email, tenantId })
       .select('+password +refreshToken')
       .populate({ path: 'role', populate: { path: 'permissions' } });
 
     if (!user || !(await user.comparePassword(password))) {
-      throw new ApiError(401, 'Invalid email or password.');
+      throw new ApiError(401, 'Invalid email, password or Shop Code.');
     }
 
     if (user.status === 'suspended') {
       throw new ApiError(403, 'Account suspended. Contact your administrator.');
-    }
-
-    if (!user.isEmailVerified) {
-      throw new ApiError(403, 'Email not verified. Please verify your email first.');
     }
 
     const tokenPayload = { id: user._id, tenantId: user.tenantId, role: user.role.name };
@@ -271,12 +288,10 @@ class AuthService {
   }
 
   // ─── FORGOT PASSWORD ──────────────────────────────────────────────────────
-  async forgotPassword(email, tenantId) {
+  async forgotPassword(email, tenantIdOrCode) {
+    const tenantId = await this.resolveShopCode(tenantIdOrCode);
     const user = await User.findOne({ email, tenantId });
-    if (!user) {
-      // Return success even if not found to prevent email enumeration
-      return true;
-    }
+    if (!user) return true; // Don't reveal if user exists
 
     const otp = generateOTP(6);
     user.otpCode = otp;
@@ -293,14 +308,16 @@ class AuthService {
   }
 
   // ─── VERIFY OTP ───────────────────────────────────────────────────────────
-  async verifyOtp(email, tenantId, otp, purpose) {
+  async verifyOtp(email, tenantIdOrCode, otp, purpose) {
+    const tenantId = await this.resolveShopCode(tenantIdOrCode);
     const user = await authRepository.findUserByOtp(email, tenantId, otp, purpose);
     if (!user) throw new ApiError(400, 'Invalid or expired OTP.');
     return { verified: true, userId: user._id };
   }
 
   // ─── RESET PASSWORD ───────────────────────────────────────────────────────
-  async resetPassword(email, tenantId, otp, newPassword) {
+  async resetPassword(email, tenantIdOrCode, otp, newPassword) {
+    const tenantId = await this.resolveShopCode(tenantIdOrCode);
     const user = await authRepository.findUserByOtp(email, tenantId, otp, 'password_reset');
     if (!user) throw new ApiError(400, 'Invalid or expired OTP. Please request a new one.');
 

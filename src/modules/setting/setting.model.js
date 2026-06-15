@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const settingsSchema = new mongoose.Schema(
   {
     tenantId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
+    shopCode: { type: String, unique: true, sparse: true },
     shopName: { type: String, trim: true, default: 'My Shop' },
     shopAddress: { type: String, trim: true },
     shopPhone: { type: String, trim: true },
