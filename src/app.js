@@ -17,8 +17,24 @@ app.use(helmet({
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Enable CORS
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : [];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.length === 0 || 
+      allowedOrigins.includes(origin) || 
+      allowedOrigins.includes('*') ||
+      origin.startsWith('http://localhost:') || 
+      origin.endsWith('.vercel.app')
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 
