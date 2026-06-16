@@ -3,8 +3,56 @@ const ApiError = require('../../utils/apiError');
 const { createAuditLog } = require('../../middlewares/audit.middleware');
 const { getPagination, getPaginationMeta, getSort } = require('../../utils/queryHelper');
 const Inventory = require('../inventory/inventory.model');
+const mongoose = require('mongoose');
+const Category = require('./category.model');
+const Brand = require('./brand.model');
 
 class ProductService {
+  async resolveCategoryAndBrand(tenantId, data) {
+    // Resolve Category
+    if (data.category) {
+      if (!mongoose.Types.ObjectId.isValid(data.category)) {
+        const categoryName = data.category.trim();
+        let cat = await Category.findOne({
+          tenantId,
+          name: { $regex: new RegExp(`^${categoryName}$`, 'i') }
+        });
+        if (cat) {
+          if (!cat.isActive) {
+            cat.isActive = true;
+            await cat.save();
+          }
+        } else {
+          cat = await Category.create({
+            name: categoryName,
+            tenantId
+          });
+        }
+        data.category = cat._id;
+      }
+    }
+    
+    // Resolve Brand
+    if (!data.brand || !mongoose.Types.ObjectId.isValid(data.brand)) {
+      const brandName = (data.brand && typeof data.brand === 'string') ? data.brand.trim() : 'Generic';
+      let brand = await Brand.findOne({
+        tenantId,
+        name: { $regex: new RegExp(`^${brandName}$`, 'i') }
+      });
+      if (brand) {
+        if (!brand.isActive) {
+          brand.isActive = true;
+          await brand.save();
+        }
+      } else {
+        brand = await Brand.create({
+          name: brandName,
+          tenantId
+        });
+      }
+      data.brand = brand._id;
+    }
+  }
   // ─── CATEGORIES ──────────────────────────────────────────────────────────
   async getAllCategories(tenantId) { return productRepository.findAllCategories(tenantId); }
   async createCategory(tenantId, data, userId, ip) {
@@ -77,6 +125,7 @@ class ProductService {
   }
 
   async createProduct(tenantId, data, files, userId, ip) {
+    await this.resolveCategoryAndBrand(tenantId, data);
     const images = [];
     if (files && files.length > 0) {
       for (const file of files) {
@@ -88,10 +137,23 @@ class ProductService {
     // Auto-create inventory record for each variant (or base)
     if (product.variants && product.variants.length > 0) {
       await Promise.all(product.variants.map((v) =>
-        Inventory.create({ product: product._id, variantId: v._id, quantity: 0, tenantId })
+        Inventory.create({
+          product: product._id,
+          variantId: v._id,
+          quantity: Number(data.stock) || 0,
+          lowStockThreshold: Number(data.minStock) || 0,
+          imeiList: data.imeiList || [],
+          tenantId
+        })
       ));
     } else {
-      await Inventory.create({ product: product._id, quantity: 0, tenantId });
+      await Inventory.create({
+        product: product._id,
+        quantity: Number(data.stock) || 0,
+        lowStockThreshold: Number(data.minStock) || 0,
+        imeiList: data.imeiList || [],
+        tenantId
+      });
     }
 
     await createAuditLog({ userId, tenantId, action: 'create', module: 'products', details: { productId: product._id, name: product.name }, ipAddress: ip });
@@ -99,8 +161,26 @@ class ProductService {
   }
 
   async updateProduct(id, tenantId, data, userId, ip) {
+    if (data.category || data.brand) {
+      await this.resolveCategoryAndBrand(tenantId, data);
+    }
     const product = await productRepository.update(id, tenantId, data);
     if (!product) throw new ApiError(404, 'Product not found.');
+
+    // Update corresponding Inventory stock/threshold if provided
+    const inventoryUpdate = {};
+    if (data.stock !== undefined) inventoryUpdate.quantity = Number(data.stock);
+    if (data.minStock !== undefined) inventoryUpdate.lowStockThreshold = Number(data.minStock);
+    if (data.imeiList !== undefined) inventoryUpdate.imeiList = data.imeiList;
+
+    if (Object.keys(inventoryUpdate).length > 0) {
+      await Inventory.findOneAndUpdate(
+        { product: id, tenantId },
+        inventoryUpdate,
+        { new: true, upsert: true }
+      );
+    }
+
     await createAuditLog({ userId, tenantId, action: 'update', module: 'products', details: { productId: id }, ipAddress: ip });
     return product;
   }
