@@ -11,6 +11,7 @@ const settingsSchema = new mongoose.Schema(
     shopLogo: { type: String, default: '' },
     gstNumber: { type: String, trim: true },
     defaultTaxRate: { type: Number, default: 18 },
+    printType: { type: String, default: 'thermal', enum: ['thermal', 'a4', 'whatsapp'] },
     invoicePrefix: { type: String, default: 'INV', trim: true },
     repairTicketPrefix: { type: String, default: 'TKT', trim: true },
     poPrefix: { type: String, default: 'PO', trim: true },

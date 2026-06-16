@@ -46,9 +46,9 @@ class SaleService {
 
     for (const item of items) {
       const lineSubTotal = item.unitPrice * item.quantity;
-      const lineTax = (lineSubTotal * (item.taxRate || 0)) / 100;
       const lineDiscount = item.discountAmount || 0;
-      const lineTotal = lineSubTotal + lineTax - lineDiscount;
+      const lineTax = item.taxAmount !== undefined ? item.taxAmount : (lineSubTotal * (item.taxRate || 0)) / 100;
+      const lineTotal = item.totalPrice !== undefined ? item.totalPrice : lineSubTotal + lineTax - lineDiscount;
 
       subTotal += lineSubTotal;
       taxAmount += lineTax;
