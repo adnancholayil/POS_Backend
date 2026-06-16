@@ -32,6 +32,31 @@ async function runTests() {
   // Connect to DB
   await connectDB();
 
+  // Clean up any leftover records from prior failed runs
+  try {
+    const testUsers = await User.find({ email: /test_owner_/ });
+    const testTenantIds = testUsers.map(u => u.tenantId);
+    if (testTenantIds.length > 0) {
+      await Promise.all([
+        User.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Role.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Product.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Category.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Brand.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Inventory.deleteMany({ tenantId: { $in: testTenantIds } }),
+        InventoryMovement.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Customer.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Sale.deleteMany({ tenantId: { $in: testTenantIds } }),
+        SaleItem.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Warranty.deleteMany({ tenantId: { $in: testTenantIds } }),
+        Settings.deleteMany({ tenantId: { $in: testTenantIds } }),
+      ]);
+      logger.info(`Cleaned up ${testTenantIds.length} leftover test tenants from previous runs.`);
+    }
+  } catch (cleanupError) {
+    logger.error(`Error during initial cleanup: ${cleanupError.message}`);
+  }
+
   // Create HTTP Server
   const server = http.createServer(app);
   initSocket(server);
@@ -189,6 +214,9 @@ async function runTests() {
     if (custRes.status !== 201) throw new Error(`Customer creation failed: ${JSON.stringify(custJson)}`);
     const customerId = custJson.data._id;
     logger.info(`Customer created successfully. ID: ${customerId}`);
+
+    // Update invoice prefix to avoid index collision with existing INV0001
+    await Settings.updateOne({ tenantId }, { invoicePrefix: `T${Date.now().toString().slice(-3)}` });
 
     // ─── 8. SALES CHECKOUT (GST + PDF GENERATION) ─────────────────────────────
     logger.info('Test 8: Performing sales checkout...');

@@ -54,6 +54,14 @@ const receivePOItems = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, 'Items received and inventory updated successfully.', result));
 });
 
+const createAndReceivePO = asyncHandler(async (req, res) => {
+  const result = await supplierService.createAndReceivePO(req.tenantId, req.body, req.user._id, req.ip);
+  const message = result.stockInErrors && result.stockInErrors.length > 0
+    ? `Purchase order created. Some stock-in errors: ${result.stockInErrors.join('; ')}`
+    : 'Purchase order created and all items received. Inventory updated.';
+  res.status(201).json(new ApiResponse(201, message, result.po));
+});
+
 module.exports = {
   getAllSuppliers,
   getSupplierById,
@@ -65,4 +73,5 @@ module.exports = {
   createPO,
   updatePOStatus,
   receivePOItems,
+  createAndReceivePO,
 };

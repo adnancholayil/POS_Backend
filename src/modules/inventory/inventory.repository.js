@@ -14,6 +14,13 @@ class InventoryRepository {
     return Inventory.findOne({ product: productId, variantId: variantId || null, tenantId });
   }
 
+  // Upsert: find existing or create a zero-quantity record
+  async findOrCreateByProductAndVariant(productId, variantId, tenantId) {
+    const filter = { product: productId, variantId: variantId || null, tenantId };
+    const update  = { $setOnInsert: { quantity: 0, lowStockThreshold: 5, imeiList: [], location: 'main' } };
+    return Inventory.findOneAndUpdate(filter, update, { upsert: true, new: true, setDefaultsOnInsert: true });
+  }
+
   async findLowStock(tenantId) {
     return Inventory.find({
       tenantId,

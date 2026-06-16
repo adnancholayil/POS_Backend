@@ -10,6 +10,16 @@ router.use(protect);
 // Purchase Orders Routes
 router.get('/purchase-orders', hasPermission('suppliers:read'), controller.getAllPOs);
 router.get('/purchase-orders/:id', hasPermission('suppliers:read'), controller.getPOById);
+
+// ── One-step: create PO + immediately receive all items (standard purchase flow) ──
+router.post('/purchase-orders/create-and-receive', hasPermission('suppliers:create'), [
+  body('supplierId').isMongoId().withMessage('Invalid supplier ID.'),
+  body('items').isArray({ min: 1 }).withMessage('Items must be an array with at least 1 item.'),
+  body('items.*.productId').isMongoId().withMessage('Invalid product ID in items.'),
+  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1.'),
+  body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be >= 0.'),
+], validate, controller.createAndReceivePO);
+
 router.post('/purchase-orders', hasPermission('suppliers:create'), [
   body('supplierId').isMongoId().withMessage('Invalid supplier ID.'),
   body('items').isArray({ min: 1 }).withMessage('Items must be an array with at least 1 item.'),
@@ -18,6 +28,7 @@ router.post('/purchase-orders', hasPermission('suppliers:create'), [
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1.'),
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be positive.'),
 ], validate, controller.createPO);
+
 router.patch('/purchase-orders/:id/status', hasPermission('suppliers:update'), [
   body('status').isIn(['draft', 'ordered', 'cancelled']).withMessage('Invalid PO status.'),
 ], validate, controller.updatePOStatus);

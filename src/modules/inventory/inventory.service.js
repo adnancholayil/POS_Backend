@@ -83,10 +83,12 @@ class InventoryService {
 
   async stockIn(tenantId, { productId, variantId, quantity, reason, imeiList, referenceId, referenceModel }, userId) {
     if (!quantity || quantity <= 0) throw new ApiError(400, 'Quantity must be a positive number.');
-    const inv = await inventoryRepository.findByProductAndVariant(productId, variantId, tenantId);
-    if (!inv) throw new ApiError(404, 'Inventory record not found for this product/variant.');
+    // Auto-create inventory record if it doesn't exist yet (needed for PO receiving)
+    const inv = await inventoryRepository.findOrCreateByProductAndVariant(productId, variantId, tenantId);
+    if (!inv) throw new ApiError(500, 'Could not create or find inventory record.');
     return this._adjustStock({ inventory: inv, type: 'stock_in', quantity, reason, imeiList, referenceId, referenceModel, performedBy: userId, tenantId });
   }
+
 
   async stockOut(tenantId, { productId, variantId, quantity, reason, imeiList, referenceId, referenceModel }, userId) {
     if (!quantity || quantity <= 0) throw new ApiError(400, 'Quantity must be a positive number.');

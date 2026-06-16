@@ -73,6 +73,8 @@ const MANAGER_PERMISSIONS = [
   'tasks:create','tasks:read','tasks:update',
   'reports:read',
   'users:read',
+  'users:create',
+  'users:update',
   'attendance:read','attendance:mark',
   'suppliers:read','suppliers:create','suppliers:update',
 ];
@@ -147,6 +149,7 @@ class AuthService {
     const existing = await require('../user/user.model').findOne({ email, tenantId: PLACEHOLDER });
 
     // Create the admin user — tenantId = their own _id
+    const verifyToken = crypto.randomBytes(32).toString('hex');
     const user = await authRepository.createUser({
       name,
       email,
@@ -155,6 +158,8 @@ class AuthService {
       tenantId: PLACEHOLDER, // temp
       status: 'active',
       isEmailVerified: true, // auto-verified so login works immediately
+      emailVerificationToken: verifyToken,
+      emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000,
     });
 
     // Set tenantId = own _id

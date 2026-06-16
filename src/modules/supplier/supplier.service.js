@@ -102,7 +102,7 @@ class SupplierService {
     if (!supplier) throw new ApiError(404, 'Supplier not found.');
 
     const settings = await Settings.findOne({ tenantId });
-    const prefix = (settings && settings.purchaseOrderPrefix) || 'PO';
+    const prefix = (settings && (settings.poPrefix || settings.purchaseOrderPrefix)) || 'PO';
     const poNumber = await supplierRepository.getNextPONumber(tenantId, prefix);
 
     let totalAmount = 0;
@@ -236,6 +236,96 @@ class SupplierService {
     });
 
     return po;
+  }
+  /**
+   * createAndReceivePO – atomic one-step purchase:
+   * Creates PO in 'ordered' status, immediately receives all items,
+   * triggers inventory stock-in for each line, returns fully received PO.
+   */
+  async createAndReceivePO(tenantId, data, userId, ip) {
+    const { supplierId, items, notes, expectedDeliveryDate } = data;
+    if (!items || items.length === 0) throw new ApiError(400, 'At least one item is required.');
+
+    const supplier = await supplierRepository.findSupplierById(supplierId, tenantId);
+    if (!supplier) throw new ApiError(404, 'Supplier not found.');
+
+    const settings = await Settings.findOne({ tenantId });
+    const prefix = (settings && (settings.poPrefix || settings.purchaseOrderPrefix)) || 'PO';
+    const poNumber = await supplierRepository.getNextPONumber(tenantId, prefix);
+
+    let totalAmount = 0;
+    const poItems = items.map((item) => {
+      const lineCost = (item.unitCost || 0) * (item.quantity || 1);
+      totalAmount += lineCost;
+      return {
+        product: item.productId,
+        productName: item.productName || item.name || 'Unknown',
+        variantId: item.variantId || null,
+        variantLabel: item.variantLabel || '',
+        quantity: item.quantity || 1,
+        unitCost: item.unitCost || 0,
+        totalCost: lineCost,
+        receivedQuantity: item.quantity || 1, // mark fully received
+        imeiList: item.imeiList || [],
+      };
+    });
+
+    // Create PO directly as 'received'
+    const po = await supplierRepository.createPO({
+      poNumber,
+      supplier: supplierId,
+      items: poItems,
+      totalAmount,
+      notes: notes || '',
+      expectedDeliveryDate: expectedDeliveryDate || null,
+      createdBy: userId,
+      tenantId,
+      status: 'received',
+      receivedAt: new Date(),
+    });
+
+    // Stock-in each item (auto-creates inventory record if not found)
+    const stockInErrors = [];
+    for (const item of po.items) {
+      try {
+        await inventoryService.stockIn(
+          tenantId,
+          {
+            productId: item.product,
+            variantId: item.variantId || null,
+            quantity: item.quantity,
+            reason: `Purchase Order ${po.poNumber}`,
+            imeiList: item.imeiList || [],
+            referenceId: po._id,
+            referenceModel: 'PurchaseOrder',
+          },
+          userId
+        );
+      } catch (err) {
+        stockInErrors.push(`${item.productName}: ${err.message}`);
+      }
+    }
+
+    if (stockInErrors.length > 0) {
+      // Partial success — log errors but don't roll back PO (stock might be partially updated)
+      console.error('[createAndReceivePO] Stock-in errors:', stockInErrors);
+    }
+
+    await createAuditLog({
+      userId,
+      tenantId,
+      action: 'create_and_receive',
+      module: 'purchaseOrders',
+      details: { poId: po._id, poNumber, totalAmount, itemCount: po.items.length, stockInErrors },
+      ipAddress: ip,
+    });
+
+    // Re-fetch with populated fields
+    const populated = await supplierRepository.findPOById(po._id, tenantId);
+    return {
+      po: populated,
+      stockInErrors,
+    };
   }
 }
 

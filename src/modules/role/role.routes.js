@@ -9,7 +9,7 @@ router.use(protect);
 
 // All role management is admin-only
 router.get('/permissions', controller.getAllPermissions);
-router.get('/', authorize('admin'), controller.getAllRoles);
+router.get('/', authorize('admin', 'manager'), controller.getAllRoles);
 router.get('/:id', authorize('admin'), controller.getRoleById);
 router.put('/:id/permissions', authorize('admin'), [
   body('permissions').isArray().withMessage('permissions must be an array of IDs.'),
