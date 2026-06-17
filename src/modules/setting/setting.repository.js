@@ -10,7 +10,11 @@ class SettingRepository {
   }
 
   async update(tenantId, data) {
-    return Settings.findOneAndUpdate({ tenantId }, data, { new: true, runValidators: true, upsert: true });
+    return Settings.findOneAndUpdate(
+      { tenantId },
+      { $set: data },
+      { new: true, runValidators: false, upsert: true }
+    );
   }
 }
 

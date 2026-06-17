@@ -68,6 +68,11 @@ app.get('/', (req, res) => {
   res.status(200).json({ message: 'POS SaaS Backend API is running.' });
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is healthy.' });
+});
+
 // Mount module routes
 app.use('/api/v1/auth', require('./modules/auth/auth.routes'));
 app.use('/api/v1/users', require('./modules/user/user.routes'));

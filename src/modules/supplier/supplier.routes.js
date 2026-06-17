@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('./supplier.controller');
-const { protect, hasPermission } = require('../../middlewares/auth.middleware');
+const { protect } = require('../../middlewares/auth.middleware');
 const { body } = require('express-validator');
 const validate = require('../../middlewares/validate.middleware');
 
 router.use(protect);
 
 // Purchase Orders Routes
-router.get('/purchase-orders', hasPermission('suppliers:read'), controller.getAllPOs);
-router.get('/purchase-orders/:id', hasPermission('suppliers:read'), controller.getPOById);
+router.get('/purchase-orders', controller.getAllPOs);
+router.get('/purchase-orders/:id', controller.getPOById);
 
 // ── One-step: create PO + immediately receive all items (standard purchase flow) ──
-router.post('/purchase-orders/create-and-receive', hasPermission('suppliers:create'), [
+router.post('/purchase-orders/create-and-receive', [
   body('supplierId').isMongoId().withMessage('Invalid supplier ID.'),
   body('items').isArray({ min: 1 }).withMessage('Items must be an array with at least 1 item.'),
   body('items.*.productId').isMongoId().withMessage('Invalid product ID in items.'),
@@ -20,7 +20,7 @@ router.post('/purchase-orders/create-and-receive', hasPermission('suppliers:crea
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be >= 0.'),
 ], validate, controller.createAndReceivePO);
 
-router.post('/purchase-orders', hasPermission('suppliers:create'), [
+router.post('/purchase-orders', [
   body('supplierId').isMongoId().withMessage('Invalid supplier ID.'),
   body('items').isArray({ min: 1 }).withMessage('Items must be an array with at least 1 item.'),
   body('items.*.productId').isMongoId().withMessage('Invalid product ID.'),
@@ -29,10 +29,10 @@ router.post('/purchase-orders', hasPermission('suppliers:create'), [
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be positive.'),
 ], validate, controller.createPO);
 
-router.patch('/purchase-orders/:id/status', hasPermission('suppliers:update'), [
+router.patch('/purchase-orders/:id/status', [
   body('status').isIn(['draft', 'ordered', 'cancelled']).withMessage('Invalid PO status.'),
 ], validate, controller.updatePOStatus);
-router.post('/purchase-orders/:id/receive', hasPermission('suppliers:update'), [
+router.post('/purchase-orders/:id/receive', [
   body('itemsReceived').isArray({ min: 1 }).withMessage('itemsReceived must be a non-empty array.'),
   body('itemsReceived.*.itemId').isMongoId().withMessage('Invalid PO item ID.'),
   body('itemsReceived.*.quantity').isInt({ min: 1 }).withMessage('Quantity received must be at least 1.'),
@@ -40,17 +40,17 @@ router.post('/purchase-orders/:id/receive', hasPermission('suppliers:update'), [
 ], validate, controller.receivePOItems);
 
 // Supplier CRUD Routes
-router.get('/', hasPermission('suppliers:read'), controller.getAllSuppliers);
-router.get('/:id', hasPermission('suppliers:read'), controller.getSupplierById);
-router.post('/', hasPermission('suppliers:create'), [
+router.get('/', controller.getAllSuppliers);
+router.get('/:id', controller.getSupplierById);
+router.post('/', [
   body('name').trim().notEmpty().withMessage('Supplier name is required.'),
   body('phone').optional().trim(),
   body('email').optional().isEmail().withMessage('Invalid email format.'),
 ], validate, controller.createSupplier);
-router.put('/:id', hasPermission('suppliers:update'), [
+router.put('/:id', [
   body('name').optional().trim().notEmpty().withMessage('Supplier name cannot be empty.'),
   body('email').optional().isEmail().withMessage('Invalid email format.'),
 ], validate, controller.updateSupplier);
-router.delete('/:id', hasPermission('suppliers:delete'), controller.deleteSupplier);
+router.delete('/:id', controller.deleteSupplier);
 
 module.exports = router;

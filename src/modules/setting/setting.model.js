@@ -22,6 +22,20 @@ const settingsSchema = new mongoose.Schema(
     lowStockAlertEnabled: { type: Boolean, default: true },
     emailNotifications: { type: Boolean, default: true },
     timezone: { type: String, default: 'Asia/Kolkata' },
+    primaryColorType: { type: String, default: 'solid', enum: ['solid', 'gradient'] },
+    primaryColorSolid: { type: String, default: '#2563eb' },
+    primaryColorGradient: {
+      from: { type: String, default: '#06b6d4' },
+      to: { type: String, default: '#3b82f6' },
+      angle: { type: String, default: '135deg' }
+    },
+    secondaryColorType: { type: String, default: 'solid', enum: ['solid', 'gradient'] },
+    secondaryColorSolid: { type: String, default: '#8b5cf6' },
+    secondaryColorGradient: {
+      from: { type: String, default: '#8b5cf6' },
+      to: { type: String, default: '#ec4899' },
+      angle: { type: String, default: '135deg' }
+    },
   },
   { timestamps: true }
 );

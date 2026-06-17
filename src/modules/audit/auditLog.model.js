@@ -6,7 +6,7 @@ const auditLogSchema = new mongoose.Schema(
     tenantId: { type: mongoose.Schema.Types.ObjectId, required: true },
     action: {
       type: String,
-      enum: ['create', 'update', 'delete', 'auth', 'stock_in', 'stock_out', 'adjustment', 'repair_update', 'sale'],
+      enum: ['create', 'update', 'delete', 'auth', 'stock_in', 'stock_out', 'adjustment', 'repair_update', 'sale', 'update_settings', 'update_status', 'receive_items', 'create_and_receive'],
       required: true,
     },
     module: { type: String, required: true, trim: true },
