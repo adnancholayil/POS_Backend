@@ -36,6 +36,24 @@ const settingsSchema = new mongoose.Schema(
       to: { type: String, default: '#ec4899' },
       angle: { type: String, default: '135deg' }
     },
+    pageAccess: {
+      type: Object,
+      default: {
+        'Dashboard': ['admin', 'manager', 'salesman'],
+        'Products': ['admin', 'manager'],
+        'Inventory': ['admin', 'manager'],
+        'Purchases': ['admin', 'manager'],
+        'Sales / POS': ['admin', 'manager', 'salesman'],
+        'Service Center': ['admin', 'manager', 'salesman'],
+        'Customers': ['admin', 'manager', 'salesman'],
+        'Second Hand': ['admin', 'manager'],
+        'Warranty': ['admin', 'manager'],
+        'Staff': ['admin', 'manager'],
+        'Tasks': ['admin', 'manager', 'salesman'],
+        'Reports': ['admin', 'manager'],
+        'Settings': ['admin', 'manager', 'salesman']
+      }
+    },
   },
   { timestamps: true }
 );
